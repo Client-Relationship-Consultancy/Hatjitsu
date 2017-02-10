@@ -10,6 +10,8 @@ function MainCtrl($scope, $timeout) {
   $scope.errorMessage = null;
   $scope.message = null;
 
+  $scope.showMeanMode = false;
+
   $scope.$on('$routeChangeSuccess', function () {
     $scope.logoState = '';
     $scope.bodyState = '';
@@ -97,10 +99,14 @@ function RoomCtrl($scope, $routeParams, $timeout, socket) {
     voteArr.length = $scope.voterCount - voteCount;
     $scope.placeholderVotes = voteArr;
 
-
     $scope.forceRevealDisable = (!$scope.forcedReveal && ($scope.votes.length < $scope.voterCount || $scope.voterCount === 0)) ? false : true;
 
-    if ($scope.votes.length === $scope.voterCount || $scope.forcedReveal) {
+    $scope.updatejMeanMode();
+
+    var isDone = ($scope.votes.length === $scope.voterCount || $scope.forcedReveal);
+    $scope.showMeanMode = isDone;
+
+    if (isDone) {
       var uniqVotes = _.chain($scope.votes).pluck('vote').uniq().value().length;
       if (uniqVotes === 1) {
         $scope.$emit('unanimous vote');
@@ -196,6 +202,8 @@ function RoomCtrl($scope, $routeParams, $timeout, socket) {
 
     $scope.connections = roomObj.connections;
     $scope.humanCount = $scope.connections.length;
+    $scope.jMean = "?";
+    $scope.jMode = "?";
     $scope.cardPack = roomObj.cardPack;
     $scope.forcedReveal = roomObj.forcedReveal;
     $scope.cards = chooseCardPack($scope.cardPack);
@@ -317,6 +325,73 @@ function RoomCtrl($scope, $routeParams, $timeout, socket) {
     // console.log("set card pack", { roomUrl: $scope.roomId, cardPack: cardPack });
     socket.emit('set card pack', { roomUrl: $scope.roomId, cardPack: cardPack });
   };
+
+  $scope.updatejMeanMode = function () {
+
+    // if there are no voters, don't update
+    if ($scope.votes.length == 0) return;
+
+    //get the vote values. votes is an array of objects. we don't care about other properties really
+    var voteValues = _.map($scope.votes, function (vote) {
+      return vote.vote;
+    });
+
+    //we need numeric values to calculate a mean
+    //1/2 as unicode comes out as 0.5,
+    //coffee etc are just disregarded (set as null)
+    var cleanVoteValues = _.map(voteValues, function (voteValue) {
+      var p = parseInt(voteValue);
+      if (_.isNaN(p)) {
+        switch (voteValue) {
+          case "½":
+            p = 0.5;
+            break;
+          default:
+            p = null;
+        }
+      }
+      return p;
+    });
+
+    //so we got some nulls maybe (e.g. coffee)
+    //this is because map has to return something for every element
+    //anyway, bin them
+    cleanVoteValues = _.filter(cleanVoteValues, function (cleanVoteValue) {
+      return !(_.isNull(cleanVoteValue));
+    });
+
+    //calculate total by reduction, and mean by division
+    var total = _.reduce(cleanVoteValues, function(soFar, bit) { return soFar + bit; }, 0);
+    $scope.jMean = (total / cleanVoteValues.length).toString();
+
+    //okay, here's the mode... it's a bit nasty
+    // inspired by https://github.com/VariableOutcome/cc-api/blob/master/ingredients/data/index.js#L203
+    var frequencies = [];
+    _.each(voteValues, function(element) {
+      var existingFrequency = _.find(frequencies, function(frequency) {
+        return (frequency.element == element);
+      });
+      if (existingFrequency) {
+        existingFrequency.count++;
+      } else {
+        var blankFrequency = {
+          "element": element,
+          "count": 1
+        }
+        frequencies.push(blankFrequency);
+      }
+    });
+    $scope.jMode = frequencies.sort(function(a, b) {return b.count - a.count })[0].element;
+
+    //debug
+    // console.log("cleanVoteValues:");
+    // console.log(cleanVoteValues);
+    // console.log("total: %s", total);
+    // console.log("count: %s", cleanVoteValues.length);
+    // console.log("jMean: %s", $scope.jMean);
+    // console.log("jMode: %s", $scope.jMode);
+
+  }
 
   $scope.vote = function (vote) {
     if ($scope.myVote !== vote) {

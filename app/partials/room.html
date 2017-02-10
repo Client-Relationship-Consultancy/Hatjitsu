@@ -40,7 +40,6 @@
   </section>
 
   <section class="votePanel" >
-    <!-- <span class="sub">Humans: <span class="label">{{humanCount}}</span></span> -->
 
     <div class="switch">
       <input type="checkbox" ng-model="voter" ng-disabled="forceRevealDisable" ng-change="toggleVoter()">
@@ -60,6 +59,14 @@
         </div>
       </div>
 
+    </div>
+    <div ng-show="showMeanMode == true">
+      <p>
+        Mean: <b>{{jMean}}</b>
+      </p>
+      <p>
+        Mode: <b>{{jMode}}</b>
+      </p>
     </div>
 
     <div class="cards{{votingState}}" id="chosenCards">
